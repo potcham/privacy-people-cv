@@ -35,15 +35,18 @@ while cap.isOpened():
 
         mask = np.zeros((frame.shape[0],frame.shape[1]))
 
-        print(cls, pos)
+        # print(cls, pos)
         if pos or pos==0:
-            # print(cls, pos)
+            print(cls, pos)
             try: 
-                mask = results[0].masks.data.cpu().numpy()[pos]
-                mask = cv2.resize(mask, (frame.shape[1],frame.shape[0]))
+                m = results[0].masks.data.cpu().numpy()[pos]
+                mask = cv2.resize(m, (frame.shape[1],frame.shape[0]))
             except:
                 print('multiple persons')
-                continue
+                for p in pos:
+                    m = results[0].masks.data.cpu().numpy()[p]
+                    # print(m.shape, mask.shape)
+                    mask += cv2.resize(m, (frame.shape[1],frame.shape[0]))
 
         cv2.imshow('frame', mask)
 
