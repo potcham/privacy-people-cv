@@ -61,9 +61,9 @@ while cap.isOpened():
                     mask += cv2.resize(m, (frame.shape[1],frame.shape[0]))
 
         shadow_img = mask_to_shadow(frame, mask, img_reference)
-        cv2.imshow('yolo', results[0].plot(labels=False, conf=False))
+        cv2.imshow('yolo', results[0].plot(labels=False, conf=False, boxes=False))
         cv2.imshow('Ghost', shadow_img)
-        cv2.imshow('frame', mask)
+        # cv2.imshow('Mask', mask)
 
         if cv2.waitKey(25) & 0xFF==ord('q'):
             break
