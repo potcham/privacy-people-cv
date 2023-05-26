@@ -1,80 +1,55 @@
-from ultralytics import YOLO
 import cv2
-import numpy as np
+from utils import mask_to_shadow, YoloSeg
 
-model = YOLO('yolov8n-seg.pt')
+def main(video_path: str) -> None:
 
-img = cv2.imread('reference.jpg')
-print('Image shape: ', img.shape) # 720, 1280, 3
+    # 1. Parameters: Area of interest
+    X_OFFSET = 1000
+    Y_OFFSET = 150
 
-X_OFFSET = 1000
-Y_OFFSET = 150
-PEOPLE_CLS = 0
+    PERSON_IDX = 0
 
-img_reference = img#[Y_OFFSET:,:X_OFFSET,:]
+    # 2. Reference image
 
-video_path = 'video-survillance.mp4'
+    img = cv2.imread('reference.jpg')
+    img_reference = img[Y_OFFSET:,:X_OFFSET,:]
 
-def mask_to_shadow(image, mask, reference, shadow=True):
-    mask =( cv2.merge([mask,mask,mask])*255).astype(np.uint8)
-    mask_inverse = cv2.bitwise_not(mask)
-    # print(image.shape, mask_inverse.shape, image.dtype, mask_inverse.dtype)
-    mask_image = cv2.bitwise_and(image, mask_inverse)
+    # 3. Initiate model
+    model = YoloSeg(model_wights='yolov8n-seg.pt', cls=PERSON_IDX)
 
-    mask_reference = cv2.bitwise_and(reference, mask)
+    # 4. Video Loop
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print('Error opening video file')
 
-    if shadow:
-        # red_mask = mask.copy()
-        mask[:,:,:2]= 0
-        mask_reference = cv2.addWeighted(mask_reference, 0.5, mask, 0.5, 0)
+    while cap.isOpened():
+        
+        ret, frame_c = cap.read()
+        if ret:
 
-    shadow_output = cv2.bitwise_or(mask_image, mask_reference)
+            # A. area of interest
+            frame = frame_c[Y_OFFSET:,:X_OFFSET,:]
 
-    return shadow_output
+            # B. mask prediction
+            mask = model.predict(frame)
 
-cap = cv2.VideoCapture(video_path)
-if not cap.isOpened():
-    print('Error opening video file')
+            # C. mask -> shadow layer -> full frame 
+            mask = mask_to_shadow(image=frame, mask=mask, reference=img_reference)
+            frame_c[Y_OFFSET:,:X_OFFSET,:] = mask
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    if ret:
-        # cv2.imshow('Frame', frame)
+            # D. Visualization
+            cv2.rectangle(frame_c, (0, Y_OFFSET),(X_OFFSET,img.shape[0]), color=(255,0,0),thickness=2)
+            cv2.imshow('Layer in Area', frame_c)
 
-        frame = frame#[Y_OFFSET:,:X_OFFSET,:]
-        # cv2.imwrite('reference.jpg', frame)
+            if cv2.waitKey(25) & 0xFF==ord('q'):
+                break
 
-        results = model(frame)
-        cv2.imshow('yolo', results[0].plot())
-        cls = results[0].boxes.cls
-
-        pos = (cls==PEOPLE_CLS).nonzero().squeeze().tolist()
-
-        mask = np.zeros((frame.shape[0],frame.shape[1]))
-
-        # print(cls, pos)
-        if pos or pos==0:
-            print(cls, pos)
-            try: 
-                m = results[0].masks.data.cpu().numpy()[pos]
-                mask = cv2.resize(m, (frame.shape[1],frame.shape[0]))
-            except:
-                print('multiple persons')
-                for p in pos:
-                    m = results[0].masks.data.cpu().numpy()[p]
-                    # print(m.shape, mask.shape)
-                    mask += cv2.resize(m, (frame.shape[1],frame.shape[0]))
-
-        # print(frame.shape, mask.shape, img_reference.shape)
-        shadow_img = mask_to_shadow(frame, mask, img_reference)
-        cv2.imshow('Ghost', shadow_img)
-        cv2.imshow('frame', mask)
-
-        if cv2.waitKey(25) & 0xFF==ord('q'):
+        else:
             break
 
-    else:
-        break
+    cap.release()
+    cv2.destroyAllWindows()
 
-cap.release()
-cv2.destroyAllWindows()
+if __name__=="__main__":
+    video_path = 'video-survillance.mp4'
+    main(video_path)
